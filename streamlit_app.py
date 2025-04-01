@@ -3,6 +3,7 @@ import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
 from datetime import datetime
+import numpy as np
 
 st.set_page_config(page_title="Quant Strategy Backtester", layout="wide")
 
@@ -16,10 +17,11 @@ run_button = st.button("🚀 Run Backtest")
 
 # Strategy function
 def generate_signals(df):
-    df['MA20'] = df['Close'].rolling(window=20).mean()
-    df['MA50'] = df['Close'].rolling(window=50).mean()
+    df.columns = df.columns.str.lower()
+    df['ma20'] = df['close'].rolling(window=20).mean()
+    df['ma50'] = df['close'].rolling(window=50).mean()
     df.dropna(inplace=True)
-    signals = []
+
     position = 0
     capital = 10000
     history = []
@@ -30,21 +32,28 @@ def generate_signals(df):
         prev = df.iloc[i - 1]
         date = df.index[i]
 
-        if row['MA20'] > row['MA50'] and prev['MA20'] <= prev['MA50'] and position == 0:
-            position = capital // row['Close']
-            capital -= position * row['Close']
-            history.append((date, 'BUY', row['Close'], capital))
+        ma20 = row['ma20']
+        ma50 = row['ma50']
+        prev_ma20 = prev['ma20']
+        prev_ma50 = prev['ma50']
+        price = row['close']
 
-        elif row['MA20'] < row['MA50'] and prev['MA20'] >= prev['MA50'] and position > 0:
-            capital += position * row['Close']
-            history.append((date, 'SELL', row['Close'], capital))
-            position = 0
+        if pd.notna(ma20) and pd.notna(ma50) and pd.notna(prev_ma20) and pd.notna(prev_ma50):
+            if ma20 > ma50 and prev_ma20 <= prev_ma50 and position == 0:
+                position = capital // price
+                capital -= position * price
+                history.append((date, 'BUY', price, capital))
 
-        equity = capital + (position * row['Close'] if position > 0 else 0)
+            elif ma20 < ma50 and prev_ma20 >= prev_ma50 and position > 0:
+                capital += position * price
+                history.append((date, 'SELL', price, capital))
+                position = 0
+
+        equity = capital + (position * price if position > 0 else 0)
         equity_curve.append((date, equity))
 
     if position > 0:
-        final_price = df.iloc[-1]['Close']
+        final_price = df.iloc[-1]['close']
         capital += position * final_price
         history.append((df.index[-1], 'SELL-END', final_price, capital))
 
